@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="eng">
+  <head>
+    <meta name="generator"
+    content="HTML Tidy for HTML5 (experimental) for Windows https://github.com/w3c/tidy-html5/tree/c63cc39" />
+    <meta charset="utf-8" />
+    <meta name="google-signin-client_id" content="711886336473-hsbqbk2952s7j499b2gok3brapm7ir1h.apps.googleusercontent.com" />
+    <script src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous" />
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"
+    integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+    <script src="/static/scripts/index.js"></script>
+    <script src="https://apis.google.com/js/platform.js" async="" defer="defer"></script>
+    <title></title>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <div class="col-xs-6">
+          <div class="g-signin2" data-onsuccess="onSignIn"></div>
+        </div>
+        <div class="col-xs-6">
+          <a href="#" onclick="signOut();">Sign out</a>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-10">
+          <div class="panel-group">
+            <div class="panel panel-default" id="categories">
+              <div class="panel-heading">Item Categories</div>
+              <div class="panel-body">
+                <div class="col-md-12">
+                  <div class="row" id="category-container">
+                    <div class="row" id="category-list-element">
+                      <div class="row">
+                        <div class="col-xs-9">
+                          <a class="category-select-link">Category Name</a>
+                        </div>
+                        <div class="col-xs-1 authenticated-only">
+                          <div class="row">
+                            <button class="btn btn-warning category-update" data-toggle="collapse">Update</button>
+                          </div>
+                        </div>
+                        <div class="col-xs-1 authenticated-only">
+                          <button class="btn btn-danger category-delete">Delete</button>
+                        </div>
+                      </div>
+					  <div class="row collapse update-form">
+					  <div class="col-sm-3 col-sm-offset-4">
+						<label>Updated Name</label>
+					  </div>
+                      <div class="col-sm-3">
+                        <input class="update-category-name" type="text" value="" />
+                      </div>
+                      <div class="col-sm-3">
+                        <button class="update-category-name-button">Save</button>
+                      </div>
+					  </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="row authenticated-only">
+                  <div class="col-md-12">
+                    <button class="btn btn-link" id="new-item" data-toggle="collapse" data-target="#new-category-form">Add
+                    Category</button>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-12 collapse" id="new-category-form">
+                  <label for="new-category-name">New Category</label> 
+                  <input type="text" id="category-name" /> 
+                  <button id="new-category-submit">Create</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel panel-default" id="items">
+            <div class="panel-heading">
+              <label for="new-category-name">Items</label>
+            </div>
+            <div class="panel-body">
+              <div class="row">
+                <div class="col-md-12" id="item-container">
+                  <div class="row" id="item-list-element">
+                    <div class="col-xs-10">
+                      <a>Item Name Here</a>
+                    </div>
+                    <div class="col-xs-1 authenticated-only">
+                      <button class="btn btn-danger item-delete">Delete</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="row authenticated-only">
+                  <div class="col-md-12">
+                    <button class="btn btn-link" id="new-item" data-toggle="collapse" data-target="#new-item-form">Add
+                    Item</button>
+                  </div>
+                </div>
+                <div class="row authenticated-olny">
+                  <div class="col-md-12 collapse" id="new-item-form">
+                  <label for="new-item-name">New Item</label> 
+                  <input type="text" id="new-item-name" /> 
+                  <label for="new-item-description">Description</label> 
+                  <input type="text" id="new-item-description" /> 
+                  <select id="new-item-category"></select> 
+                  <button id="new-item-submit">Create</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel panel-default" id="description">
+            <div class="panel-heading">
+              <div class="col-md-12">
+                <span id="item-name">Item name here</span>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="col-md-12">
+                <div class="row">
+                  <span id="item-description">Item Description Here</span>
+                </div>
+                <div class="update-item">
+                  <div class="row authenticated-only">
+                    <div class="row">
+                      <button class="btn btn-standard item-update" data-target="#item-update-form"
+                      data-toggle="collapse">Update</button>
+                    </div>
+                  </div>
+                  <div id="item-update-form" class="row collapse">
+                    <div class="col-sm-4">
+                    <label for="update-item-name">New Name</label> 
+                    <input id="update-item-name" type="text" value="" /></div>
+                    <div class="col-sm-4">
+                    <label for="update-item-name">New Description</label> 
+                    <input id="update-item-description" type="text" value="" /></div>
+                  </div>
+                  <div class="col-sm-4">
+                    <button id="update-item-button">Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
