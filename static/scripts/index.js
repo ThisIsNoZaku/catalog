@@ -44,9 +44,10 @@ $(document).ready(function(){
 			}).then(function(response){
 				categories = response.categories;
 				if(hashPairs['category']){
-					setCategory(categories.find(function(e){
+					var category = categories.find(function(e){
 						return e.description == hashPairs["category"];
-					})['id']);
+					});
+					setCategory(category ? category['id'] : null);
 				}
 			}).then(function(){
 				var itemCategory = hashPairs['category'];
@@ -56,9 +57,10 @@ $(document).ready(function(){
 				}).then(function(response){
 					items = response.items;
 					if(hashPairs['item']){
-						setItem(items.find(function(e){
+						var item = items.find(function(e){
 							return e.description == hashPairs['item'];
-						})['id']);
+						});
+						setItem(item ? item['id'] : null);
 					}
 				});
 			});
@@ -116,6 +118,10 @@ $(document).ready(function(){
 							console.log(result);
 							alert("Something went wrong trying to delete the category.");
 						}).done(function(result){
+							if(selectedCategory == categories[index]['id']){
+								setCategory(null);
+								window.location.hash="";
+							}
 							updateDisplayedElements();
 						});
 					});
