@@ -2,15 +2,9 @@ var user;
 $(document).ready(function(){
 	gapi.load('auth2', function(){
 		//Delete and update buttons only show for authenticated users.
-		if(gapi.auth2.getAuthInstance().isSignedIn.get()){
-				user = gapi.auth2.getAuthInstance()currentUser.get();
-				$(".authenticated-only").show();
-			} else {
-				$(".authenticated-only").hide();
-			}
 		gapi.auth2.getAuthInstance().isSignedIn.listen(function(signedIn){
 			if(signedIn){
-				user = gapi.auth2.getAuthInstance()currentUser.get();
+				user = gapi.auth2.getAuthInstance().currentUser.get();
 				$(".authenticated-only").show();
 				user = gapi.auth2.getAuthInstance().currentUser.get();
 			} else {
@@ -34,43 +28,40 @@ $(document).ready(function(){
 	}
 	
 	function setCategory(newCategory){
-		previousCategory = selectedCategory
-		selectedCategory = newCategory
+		previousCategory = selectedCategory;
+		selectedCategory = newCategory;
 	}
 	
 	//I replaced a lot of smaller ajax calls with this one.
 	function updateSelected(){
-		return $.when(
-			$.ajax("/items", {
+		var hashPairs = window.location.hash.substr(1).split("&").reduce(function(current, next){
+			var pair = next.split("=");
+			current[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
+			return current;
+		}, {});
+		return $.ajax("/categories", {
 				dataType : "json"
-			})
-			, 
-			$.ajax("/categories", {
-				dataType : "json"
-			})
-		).done(function(returneditems, returnedcategories){
-			categories = returnedcategories[0].categories;
-			items = returneditems[0].items;
-			var hashPairs = window.location.hash.substr(1).split("&").reduce(function(current, next){
-				var pair = next.split("=");
-				current[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
-				return current;
-			}, {});
-			for(var property in hashPairs){
-				switch(property){
-					case "category":
-						setCategory(categories.find(function(e){
-							return e[1] == hashPairs[property];
-						})[0]);
-						break;
-					case "item":
-						setItem(items.find(function(e){
-							return e[1] == hashPairs[property];
-						})[0]);
-						break;
+			}).then(function(response){
+				categories = response.categories;
+				if(hashPairs['category']){
+					setCategory(categories.find(function(e){
+						return e.description == hashPairs["category"];
+					})['id']);
 				}
-			}
-		});
+			}).then(function(){
+				var itemCategory = hashPairs['category'];
+				var url = itemCategory ? "/categories/" + selectedCategory +"/items" : "/items";
+				return $.ajax(url , {
+					dataType : "json"
+				}).then(function(response){
+					items = response.items;
+					if(hashPairs['item']){
+						setItem(items.find(function(e){
+							return e.description == hashPairs['item'];
+						})['id']);
+					}
+				});
+			});
 	}
 	
 	//Populate the list of items, either all or filtered by selected category
@@ -80,15 +71,16 @@ $(document).ready(function(){
 			container.empty();
 			for(var i = 0; i < items.length; i++){
 				var newElement = itemListElement.clone(true);
-				newElement.find("a").text(items[i][1]);
-				newElement.find("a").attr("href", "#item=" + items[i][1]);
+				newElement.find("a").text(items[i]['name']);
+				newElement.find("a").attr("href", "#item=" + items[i]['name']);
 				//Capture the index so the handler will have the value at this point in the loop, rather than when the handler fires.
 				(function(){
 					var index = i;
-					newElement.find(".item-delete").data("target", items[index][1]).click(function(){
+					var deleteButton = newElement.find(".item-delete")
+					deleteButton.data("target", items[index]['id']).click(function(){
 						var googleUser = gapi.auth2.getAuthInstance().currentUser.get();
 						var accessToken = googleUser.Zi.id_token
-						$.ajax("/items/" + items[index][0] + "/delete", 
+						$.ajax("/items/" + items[index]['id'] + "/delete", 
 						{
 							method : "DELETE",
 							headers : {
@@ -111,13 +103,13 @@ $(document).ready(function(){
 		$("#category-container").empty();
 		for(var i = 0; i < categories.length; i++){
 				var newElement = categoryListElement.clone(true);
-				newElement.find(".category-select-link").text(categories[i][1]);
-				newElement.find(".category-select-link").attr("href", "#category=" + categories[i][1]);
+				newElement.find(".category-select-link").text(categories[i]['description']);
+				newElement.find(".category-select-link").attr("href", "#category=" + categories[i]['description']);
 				//Capture the index so the handler will have the value at this point in the loop, rather than when the handler fires.
 				(function(){
 					var index = i;
-					newElement.find(".category-delete").data("target", categories[index][1]).click(function(){
-						$.ajax("/categories/" + categories[index][0] + "/delete", 
+					newElement.find(".category-delete").data("target", categories[index]['id']).click(function(){
+						$.ajax("/categories/" + categories[index]['id'] + "/delete", 
 						{
 							method : "DELETE"
 						}).fail(function(result){
@@ -132,11 +124,11 @@ $(document).ready(function(){
 					newElement.find(".update-category-name").attr("id", "update-category-name-" + index);
 					var updateButton = newElement.find(".update-category-name-button");
 					newElement.find(".update-category-name-button").click(function(event){
-						$.ajax("categories/" + categories[index][1] +"/update", {
+						$.ajax("categories/" + categories[index]['id'] +"/update", {
 							method : "PUT",
 							data : JSON.stringify({
 								category : {
-									id : categories[index][0],
+									id : categories[index]['id'],
 									description : $("#update-category-name-"+index).val()
 								}
 							}),
@@ -153,8 +145,8 @@ $(document).ready(function(){
 				})();
 				$("#category-container").append(newElement);
 				var option = $("<option>", {
-					value : categories[i][0],
-					text : categories[i][1]
+					value : categories[i]['id'],
+					text : categories[i]['description']
 				});
 				$("#new-item-category").append(option);
 			};
@@ -167,16 +159,15 @@ $(document).ready(function(){
 				$(".update-item").show(100);
 				$("#item-description").text(items.find(function(e){
 					return e[0] == selectedItem;
-				})[2]);
+				})['description']);
 				$("#item-name").text(items.find(function(e){
 					return e[0] == selectedItem;
-				})[1]);
+				})['description']);
 				$("#update-item-button").attr("data-id", selectedItem);
 				}
 		} else {
 			$("#item-name").text("No item to display.");
 			$("#item-description").text("");
-			$(".update-item").hide(100);
 		};
 	};
 	

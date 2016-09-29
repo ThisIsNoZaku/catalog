@@ -1,162 +1,96 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Table
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
+import inspect
 
 eng = create_engine("postgresql://server@localhost/item_catalog")
 connection = eng.connect()
-Session = sessionmaker(bing=eng)()
+Session = sessionmaker(bind=eng)()
 
+
+Base = declarative_base()
+#Named-only parameters implementation from http://stackoverflow.com/a/33794199/5602822
+class Item(Base):
+    __tablename__ = "items"
+    item_id = Column(Integer, primary_key=True)
+    name = Column("name", String)
+    description = Column("description", String)
+
+    def __init__(self, **kwargs):
+        for arg in ["name", "description", "category"]:
+            value = kwargs.pop(arg, None)
+            if not value:
+                raise TypeError("Parameter named wasn't set." % arg)
+            setattr(self, arg, value)
+
+        setattr(self, "id", kwargs.pop("id", None))
+
+class Category(Base):
+    __tablename__ = "categories"
+    category_id = Column("category_id", Integer, primary_key=True)
+    description = Column("description", String)
+    items = relationship(
+                         Item, 
+                         secondary=Table(
+                                         "item_categories",
+                                         Base.metadata, 
+                                         Column("item_id", Integer, ForeignKey("items.item_id")),
+                         Column("category_id", Integer, ForeignKey("categories.category_id"))))
+    
+    def __init__(self, **kwargs):
+        for arg in ["description"]:
+            value = kwargs.pop(arg, None)
+            if not value:
+                raise TypeError("Parameter named wasn't set." % arg)
+            setattr(self, arg, value)
+
+        setattr(self, "id", kwargs.pop("id", None))
+
+#Type checking decorator adapted from http://stackoverflow.com/a/15300191/5602822
+def accepts(*types):
+    def check_accepts(f):
+        assert len(types) == len(inspect.getargspec(f).args)
+        def new_f(*args, **kwds):
+            for (a, t) in zip(args, types):
+                assert isinstance(a, t), \
+                       "arg %r does not match %s" % (a,t)
+            return f(*args, **kwds)
+        new_f.__name__ = f.__name__
+        return new_f
+    return check_accepts
+
+    
+def get_category(id):
+    return Session.query(Category).filter(Category.category_id==id).first()
+    
+    
 def get_categories():
     """
     Returns a list of tuples containing the ids and descriptions
     of all categories.
     """
-	
-	return Session.query(Category).all()
+    return Session.query(Category).all()
 
-
-def get_items_for_category(category):
-    """
-    Returns a list of tuples of all items whose category
-    is the given category id.
-    """
-    result = []
-    try:
-        cursor = connection.cursor()
-        cursor.execute("""select * from items
-        inner join
-        item_categories on items.item_id = item_categories.item_id
-        inner join
-        categories on categories.category_id = item_categories.category_id
-        and categories.category_id = %s
-        """, (category,))
-
-        result = cursor.fetchall()
-    except:
-        connection.rollback()
-    finally:
-        cursor.close()
-    return result
-
-
-def get_items():
-    """
-    Returns a list of tuples of all items.
-    """
-    result = None
-    try:
-        cursor = connection.cursor()
-        cursor.execute("select * from items")
-        result = cursor.fetchall()
-    except:
-        connection.rollback()
-    finally:
-        cursor.close()
-    return result
-
-
-def create_item(item):
-    """
-    Create a new item, using the given tuple of properties.
-    The tuple must contain an entry for 'name', 'description' and 'category'.
-    """
-    try:
-        cursor = connection.cursor()
-        cursor.execute(
-            """with new_id as
-            (insert into items(name, description)
-            values(%s, %s) returning item_id)
-            insert into item_categories(item_id, category_id)
-            values ((select item_id from new_id), %s)""",
-            (item['name'], item['description'], item['category'])
-        )
-        connection.commit()
-        return cursor.rowcount != 0
-    except Exception as ex:
-        connection.rollback()
-        raise ex
-    finally:
-        cursor.close()
-
-
-def delete_item(item):
-    """
-    Delete the item with the given id.
-    """
-    try:
-        cursor = connection.cursor()
-        cursor.execute("delete from items where items.item_id = %s", (item,))
-        connection.commit()
-    except Exception as ex:
-        connection.rollback()
-        raise ex
-    finally:
-        cursor.close()
-
-
-def update_item(item):
-    """
-    Takes a tuple containing an 'id' entry and optionally a
-    'description' and/or 'name' entry.
-
-    The item with the given id has its name and/or description
-    updated with the given values.
-    """
-    try:
-        cursor = connection.cursor()
-        if(item["description"]):
-            cursor.execute("""update items
-                              set description = %s
-                              where item_id = %s""",
-                           (item["description"], item["id"],))
-        if(item["name"]):
-            cursor.execute("""update items set name = %s
-                              where item_id = %s""",
-                           (item["name"], item["id"],))
-        connection.commit()
-        cursor.execute("select * from items where item_id = %s", (item["id"],))
-        return cursor.fetchall()
-    except Exception as ex:
-        connection.rollback()
-        raise ex
-    finally:
-        cursor.close()
-
-
+    
+@accepts(Category)
 def create_category(category):
     """
     Creates a new category with the given string
     description
     """
-    try:
-        cursor = connection.cursor()
-        cursor.execute("insert into categories(description) values(%s)",
-                       (category,))
-        connection.commit()
-    except Exception as ex:
-        connection.rollback()
-        raise ex
-    finally:
-        cursor.close()
+    Session.add(category)
+    Session.commit()
 
-
+@accepts(Category)
 def delete_category(category):
     """
     Deletes the category with the given id.
     """
-    try:
-        cursor = connection.cursor()
-        cursor.execute("""delete from categories
-                          where categories.category_id = %s""",
-                       (category,))
-        connection.commit()
-    except Exception as ex:
-        connection.rollback()
-        raise ex
-    finally:
-        cursor.close()
+    Session.delete(category)
+    Session.commit()
 
 
+@accepts(Category)
 def update_category(category):
     """
     Takes a tuple containing an 'id' entry and optionally a
@@ -165,40 +99,44 @@ def update_category(category):
     The category with the given id has its description
     updated with the given values.
     """
-    try:
-        cursor = connection.cursor()
-        cursor.execute("""update categories
-                          set description = %s where category_id = %s""",
-                       (category["description"], category["id"],))
-        connection.commit()
-        print("Update complete")
-    except Exception as ex:
-        connection.rollback()
-        raise ex
-    finally:
-        cursor.close()
+    
+    Session.add(category)
+    Session.commit()
 
 
-Base = declarative_base()
-		
-class Item(Base):
+def get_items():
+    """
+    Returns a list of tuples of all items.
+    """
+    return Session.query(Item).all()
 
-	def __init__(self, **kwargs):
-		for arg in ["name", "description"]
-			value = kwargs.pop(arg, None)
-			if not value:
-				raise TypeError("Parameter named wasn't set." % arg)
-			setattr(self, arg, value)
 
-		setattr(self, "id", kwargs.pop("id", None))
+@accepts(Item)
+def create_item(item):
+    """
+    
+    """
+    if not isInstance(item, Item):
+        raise TypeError("Argument must be instance of Item.")
+    Session.add(item)
+    Session.commit()
 
-class Category(Base):
+@accepts(Item)
+def delete_item(item):
+    """
+    Delete the item with the given id.
+    """
+    Session.query(Item).filter(Item.item_id==item).delete()
+    Session.commit()
 
-	def __init__(self, **kwargs):
-		for arg in ["description"]
-			value = kwargs.pop(arg, None)
-			if not value:
-				raise TypeError("Parameter named wasn't set." % arg)
-			setattr(self, arg, value)
+@accepts(Item)
+def update_item(item):
+    """
+    Takes a tuple containing an 'id' entry and optionally a
+    'description' and/or 'name' entry.
 
-		setattr(self, "id", kwargs.pop("id", None))
+    The item with the given id has its name and/or description
+    updated with the given values.
+    """
+    Session.add(item)
+    Session.commit()
