@@ -39,7 +39,7 @@ $(document).ready(function(){
 			current[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
 			return current;
 		}, {});
-		return $.ajax("/categories", {
+		return $.ajax("/categories.json", {
 				dataType : "json"
 			}).then(function(response){
 				categories = response.categories;
@@ -50,15 +50,14 @@ $(document).ready(function(){
 					setCategory(category ? category['id'] : null);
 				}
 			}).then(function(){
-				var itemCategory = hashPairs['category'];
-				var url = itemCategory ? "/categories/" + selectedCategory +"/items" : "/items";
+				var url = selectedCategory? "/categories/" + selectedCategory +"/items.json" : "/items.json";
 				return $.ajax(url , {
 					dataType : "json"
 				}).then(function(response){
 					items = response.items;
 					if(hashPairs['item']){
 						var item = items.find(function(e){
-							return e.description == hashPairs['item'];
+							return e.name == hashPairs['item'];
 						});
 						setItem(item ? item['id'] : null);
 					}
@@ -69,36 +68,34 @@ $(document).ready(function(){
 	//Populate the list of items, either all or filtered by selected category
 	function displayItemsList(){
 		var container = $("#item-container");
-		if(selectedCategory != previousCategory || (selectedCategory === undefined && previousCategory === undefined)){
-			container.empty();
-			for(var i = 0; i < items.length; i++){
-				var newElement = itemListElement.clone(true);
-				newElement.find("a").text(items[i]['name']);
-				newElement.find("a").attr("href", "#item=" + items[i]['name']);
-				//Capture the index so the handler will have the value at this point in the loop, rather than when the handler fires.
-				(function(){
-					var index = i;
-					var deleteButton = newElement.find(".item-delete")
-					deleteButton.data("target", items[index]['id']).click(function(){
-						var googleUser = gapi.auth2.getAuthInstance().currentUser.get();
-						var accessToken = googleUser.Zi.id_token
-						$.ajax("/items/" + items[index]['id'] + "/delete", 
-						{
-							method : "DELETE",
-							headers : {
-								"user_id_token" : user.Zi.id_token
-							}
-						}).fail(function(result){
-							console.log(result);
-							alert("Something went wrong trying to delete the item.");
-						}).done(function(result){
-							updateDisplayedElements();
-						});
+		container.empty();
+		for(var i = 0; i < items.length; i++){
+			var newElement = itemListElement.clone(true);
+			newElement.find("a").text(items[i]['name']);
+			newElement.find("a").attr("href", "#item=" + items[i]['name']);
+			//Capture the index so the handler will have the value at this point in the loop, rather than when the handler fires.
+			(function(){
+				var index = i;
+				var deleteButton = newElement.find(".item-delete")
+				deleteButton.data("target", items[index]['id']).click(function(){
+					var googleUser = gapi.auth2.getAuthInstance().currentUser.get();
+					var accessToken = googleUser.Zi.id_token
+					$.ajax("/items/" + items[index]['id'] + "/delete", 
+					{
+						method : "DELETE",
+						headers : {
+							"user_id_token" : user.Zi.id_token
+						}
+					}).fail(function(result){
+						console.log(result);
+						alert("Something went wrong trying to delete the item.");
+					}).done(function(result){
+						updateDisplayedElements();
 					});
-				})();
-				$("#item-container").append(newElement);
-			};
-		}
+				});
+			})();
+			$("#item-container").append(newElement);
+		};
 	}
 	
 	function displayCategoriesList(){
@@ -164,16 +161,17 @@ $(document).ready(function(){
 			if(selectedItem !== previousItem){
 				$(".update-item").show(100);
 				$("#item-description").text(items.find(function(e){
-					return e[0] == selectedItem;
+					return e['id'] == selectedItem;
 				})['description']);
 				$("#item-name").text(items.find(function(e){
-					return e[0] == selectedItem;
-				})['description']);
+					return e['id'] == selectedItem;
+				})['name']);
 				$("#update-item-button").attr("data-id", selectedItem);
 				}
 		} else {
 			$("#item-name").text("No item to display.");
 			$("#item-description").text("");
+			$(".update-item").hide()
 		};
 	};
 	
@@ -197,7 +195,9 @@ $(document).ready(function(){
 		{
 			method : "POST",
 			data : JSON.stringify({
-				category : newCategory
+				category : {
+					description : newCategory
+				}
 			}),
 			contentType: 'application/json; charset=utf-8',
 			headers : {

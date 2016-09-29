@@ -18,21 +18,61 @@ verified_id_token = None
 
 
 def unauthorized_response():
-    return Response("The request authorization token was invalid", 401)
+    return make_response("The request authorization token was invalid", 401)
 
 
-class authorizedOnly:
-    __name__ = "authorisedOnly"
-
-    def __init__(self, f):
-        pass
-
-    def __call__(self, f, *args):
+def authenticatedOnly(f, *args):
+    """
+    Decorator for methods that are only available to authenticated
+    clients.
+    """
+    def new_f(*args):
         request_id = request.get_json().get("idToken")
         if request_id != verified_id_token:
             return unauthorized_response()
         else:
             return f(args)
+    return new_f
+
+
+def usesCategory(f):
+    """
+    Decorator for handler methods that require a category instance.
+    """
+    def new_f(category_id):
+        category = data.get_category(category_id)
+        if not category:
+            return make_response("There is no category with that id.", 404)
+        return f(category)
+    new_f.__name__ = f.__name__
+    return new_f
+
+
+def usesItem(f):
+    """
+    Decorator for handler methods that require a category instance.
+    """
+    def new_f(item_id):
+        item = data.get_item(item_id)
+        if not item:
+            return make_response("There is no item with that id.", 404)
+        print()
+        return f(item)
+    new_f.__name__ = f.__name__
+    return new_f
+
+
+def jsonPayload(f):
+    """
+    Decorator for handler methods that accept only json payload.
+    """
+    def new_f(*args):
+        print("Detecting json")
+        if not request.is_json():
+            return make_response("The endpoint requires a json request body.", 400)
+        return f(*args)
+    new_f.__name__ = f.__name__
+    return new_f
 
 
 @app.route("/")
@@ -40,81 +80,115 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/categories")
+@app.route("/categories.json")
 def categories():
+    """
+    JSON endpoint for all item categories.
+    """
     return jsonify({'categories': [
         {'description': c.description,
          'id': c.category_id} for c in data.get_categories()
     ]})
 
 
-@authorizedOnly
+@authenticatedOnly
 @app.route("/categories/create", methods=['POST'])
+@jsonPayload
 def categoryCreate():
-    json = request.get_json()
+    """
+    Endpoint for creating a new item category, takes a json payload
+    with a 'category' property and populates a Category instance with
+    it.
+    """
+    json = request.get_json().get("category")
     if not json.get('description'):
-        return make_response("A category description wasn't included.", 400)
+        return make_response("Json payload requires a 'category'"
+                             " object with a 'description' property.", 400)
     category = Category(description=json.get("description"))
     data.create_category(category)
     return "OK"
 
 
-@authorizedOnly
-@app.route("/categories/<int:category>/delete", methods=["DELETE"])
+@authenticatedOnly
+@app.route("/categories/<int:category_id>/delete", methods=["DELETE"])
+@usesCategory
 def delete_category(category):
-    if not data.get_category(category):
-        return make_response("There is no category with that id.", 404)
-    data.delete_category(data.get_category(category))
+    """
+    Endpoint to delete a category.
+    """
+    data.delete_category(category)
     return "OK"
 
 
-@authorizedOnly
-@app.route("/categories/<int:category>/update", methods=["PUT"])
+@authenticatedOnly
+@jsonPayload
+@app.route("/categories/<int:category_id>/update", methods=["PUT"])
+@usesCategory
 def update_category(category):
-    if not data.get_category(category):
-        return make_response("There is no category with that id.", 404)
+    """
+    Endpoint to update a category, takes a json payload and updates the
+    category with the specified id with the payload.
+    """
     json = request.get_json().get("category")
     if not json:
-        return make_response("The provided json was invalid.", 400)
-    updated = data.get_category(json.get("id"))
-    updated.description = json.get("description")
-    data.update_category(updated)
+        return make_response("The json payload requires a 'category' property.", 
+                             400)
+    category.description = json.get("description")
+    data.update_category(category)
     return "OK"
 
 
-@app.route("/items")
-@app.route("/categories/<int:category>/items")
-def get_items(category=None):
-    items = None
-    if category:
-        retrieved = data.get_category(category)
-        if not retrieved:
-            return make_response("There is no category with that id.", 404)
-        items = retrieved.items
-    else:
-        items = data.get_items()
-    transformed = [{'id': i.item_id,
+@app.route("/items.json")
+def get_items():
+    """
+    JSON endpoint to get all items.
+    """
+    return jsonify({
+        'items': [{'id': i.item_id,
                     'name': i.name,
                     'description': i.description}
-                   for i in items]
-    json = jsonify({
-        'items': transformed
+                   for i in data.get_items()]
     })
-    return json
 
 
-@app.route("/items/<int:item>")
+@app.route("/categories/<int:category_id>/items.json")
+@usesCategory
+def get_items_for_category(category):
+    """
+    JSON endpoint to get all items for the specified category.
+    """
+    return jsonify({
+        'items': [{'id': i.item_id,
+                    'name': i.name,
+                    'description': i.description}
+                   for i 
+                   in category.items]
+    })
+
+@app.route("/items/<int:item_id>.json")
+@usesItem
 def get_item(item):
-    retrieved = data.get_item(item)
-    if not retrieved:
-        return make_response("There is no item with that id.", 404)
-    return jsonify({"item": retrieved})
+    """
+    JSON endpoint for a single item.
+    """
+    return jsonify({
+        'item': {'id': item.item_id,
+                 'name': item.name,
+                 'description': item.description}
+    })
 
 
-@authorizedOnly
+@authenticatedOnly
 @app.route("/items/create", methods=["POST"])
+@jsonPayload
 def create_item():
+    """
+    Endpoint to create a new item, takes a json payload and
+    creates a new instance from it.
+    """
     item_json = request.get_json().get("item")
+    if not item_json:
+        return make_response("Json payload requires a 'item' property", 400)
     missing_fields = []
     if not item_json.get("name"):
         missing_fields.append('name')
@@ -125,13 +199,22 @@ def create_item():
                              missing_fields.join(','), 400)
     new_item = Item(name=item_json.get("name"),
                     description=item_json.get("description"))
+    # If a category is specified, add to it and persist
+    if item_json.get("category"):
+        item_category = data.get_category(item_json.get("category"))
+        item_category.items.append(new_item)
+        data.update_category(item_category)
     data.create_item(new_item)
     return "OK"
 
 
-@authorizedOnly
-@app.route("/items/<int:item>/update", methods=["PUT"])
+@authenticatedOnly
+@app.route("/items/<int:item_id>/update", methods=["PUT"])
 def update_item(item):
+    """
+    Endpoint to update an item, takes a json payload and updates
+    the existing instance with its information.
+    """
     item_json = request.get_json().get("item")
     if not item_json:
         return make_response("Json payload must contain"
@@ -148,18 +231,22 @@ def update_item(item):
     return jsonify(result)
 
 
-@authorizedOnly
-@app.route("/items/<int:item>/delete", methods=["DELETE"])
+@authenticatedOnly
+@app.route("/items/<int:item_id>/delete", methods=["DELETE"])
+@usesItem
 def delete_item(item):
-    existing_item = data.get_item(item)
-    if not existing_item:
-        return make_response("There is no item with that id", 404)
+    """
+    End point to delete an item.
+    """
     data.delete_item(item)
     return "OK"
 
 
 @app.route("/login", methods=["POST"])
 def login():
+    """
+    Validates Google login provided by the client.
+    """
     token = request.get_json().get("idToken")
     http = httplib2.Http('cache')
     response, content = http.request("https://www.googleapis.com/oauth2/v3/"
@@ -176,6 +263,11 @@ def login():
 
 @app.before_request
 def login_state():
+    """
+    State token to prevent session highjacking.
+    """
+    if session['state'] and request.headers.get('session'):
+        return make_response("Invalid session state", 401)
     session['state'] = (
         ''.join(random.choice(string.ascii_uppercase +
                               string.digits)
@@ -186,4 +278,4 @@ def login_state():
 app.secret_key = "Not a real secret, but not a real website either."
 
 if (__name__ == "__main__"):
-    app.run()
+    app.run(host='0.0.0.0', port=5000)

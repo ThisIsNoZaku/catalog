@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 import inspect
 
 # Taken from tutorial @ http://zetcode.com/db/sqlalchemy/
-eng = create_engine("postgresql://server@localhost/item_catalog")
+eng = create_engine("postgresql:///item_catalog")
 connection = eng.connect()
 Session = sessionmaker(bind=eng)()
 
@@ -119,10 +119,16 @@ def update_category(category):
 
 def get_items():
     """
-    Returns a list of tuples of all items.
+    Returns a list of all Items.
     """
     return Session.query(Item).all()
 
+
+def get_item(id):
+	"""
+	Get item with given id.
+	"""
+	return Session.query(Item).filter(Item.item_id == id).first()
 
 @accepts(Item)
 def create_item(item):
