@@ -266,7 +266,7 @@ def login_state():
     """
     State token to prevent session highjacking.
     """
-    if session['state'] and request.headers.get('session'):
+    if 'state' in session and request.headers.get('session'):
         return make_response("Invalid session state", 401)
     session['state'] = (
         ''.join(random.choice(string.ascii_uppercase +
